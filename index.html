@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPI Dashboard — Hansol IONES</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#002060;--blue:#0070C0;--green:#00875A;--amber:#C96000;--red:#C00000;
+  --bg:#F4F6FA;--surface:#fff;--border:#E4E7ED;--text:#1A1A2E;--muted:#6B7280;--light:#F0F2F5;
+  --sidebar:340px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Calibri,sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
+
+/* ── HEADER */
+.header{background:var(--navy);padding:0 24px;height:50px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;}
+.h-left{display:flex;align-items:center;gap:12px;}
+.h-logo{font-size:11px;font-weight:500;color:#8FA8C8;letter-spacing:.08em;text-transform:uppercase;}
+.h-title{font-size:14px;font-weight:500;color:#fff;}
+.h-div{width:1px;height:15px;background:rgba(255,255,255,.2);}
+.h-date{font-size:11px;color:#8FA8C8;}
+
+/* ── RISK BANNER */
+.risk-banner{background:#fff8f8;border-bottom:2px solid #FEECEC;padding:8px 24px;display:none;}
+.risk-banner.show{display:block;}
+.risk-title{font-size:11px;font-weight:500;color:var(--red);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.risk-items{display:flex;gap:8px;flex-wrap:wrap;}
+.risk-item{background:#FEECEC;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.risk-item:hover{background:#fdd;}
+.risk-item .ri-pn{font-family:Calibri,monospace;font-weight:500;color:var(--red);}
+.risk-item .ri-info{color:#555;}
+
+/* ── UPLOAD BAR */
+.upload-bar{background:var(--surface);border-bottom:.5px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:10px;}
+.upload-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:11.5px;font-family:inherit;cursor:pointer;}
+.upload-btn:hover{background:#003090;}
+.upload-hint{font-size:11px;color:var(--muted);}
+.ustatus{font-size:11px;padding:3px 9px;border-radius:20px;display:none;}
+.ustatus.ok{background:#E6F4EE;color:var(--green);display:inline-block;}
+.ustatus.err{background:#FEECEC;color:var(--red);display:inline-block;}
+.ustatus.info{background:#E8F4FD;color:var(--blue);display:inline-block;}
+#file-input{display:none;}
+
+/* ── VIEW TABS */
+.view-bar{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:2px;}
+.view-tab{padding:10px 16px;font-size:12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;}
+.view-tab:hover{color:var(--text);}
+.view-tab.active{color:var(--navy);border-bottom-color:var(--navy);font-weight:500;}
+
+/* ── MAIN LAYOUT */
+.layout{display:flex;height:calc(100vh - 50px);overflow:hidden;}
+.content-area{flex:1;overflow:auto;padding:20px 24px;}
+.sidebar{width:0;overflow:hidden;background:var(--surface);border-left:.5px solid var(--border);transition:width .25s;position:relative;}
+.sidebar.open{width:var(--sidebar);}
+.sidebar-inner{width:var(--sidebar);padding:20px;overflow-y:auto;height:100%;}
+.sidebar-title{font-size:13px;font-weight:500;margin-bottom:4px;}
+.sidebar-pn{font-size:11px;font-family:Calibri,monospace;color:var(--muted);margin-bottom:14px;}
+.sidebar-close{position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;}
+
+/* ── STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px;}
+.sc{background:var(--surface);border:.5px solid var(--border);border-radius:9px;padding:13px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac);}
+.sc:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.09);}
+.sc.active-filter{box-shadow:0 0 0 2px var(--ac) inset;}
+.sc.total{--ac:var(--navy);background:var(--navy);}
+.sc.mfg{--ac:var(--blue);}
+.sc.fai{--ac:var(--green);}
+.sc.act{--ac:var(--amber);}
+.sc.hold{--ac:var(--red);}
+.sv{font-size:32px;font-weight:300;color:var(--ac);line-height:1;margin-bottom:4px;font-family:Calibri,monospace;}
+.sc.total .sv{color:#fff;font-size:36px;}
+.sl{font-size:11px;font-weight:500;}
+.sc.total .sl{color:#BDD7EE;}
+.ss{font-size:10px;color:var(--muted);margin-top:1px;}
+.sc.total .ss{color:#8FA8C8;}
+
+/* ── TOOLBAR */
+.toolbar{display:flex;gap:7px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.sw{position:relative;}
+.sw svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);opacity:.4;}
+input[type=text]{padding:6px 10px 6px 28px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);font-size:12px;width:190px;outline:none;color:var(--text);font-family:inherit;}
+input[type=text]:focus{border-color:var(--blue);}
+select{padding:6px 24px 6px 8px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);font-size:12px;outline:none;color:var(--text);font-family:inherit;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;cursor:pointer;}
+select:focus{border-color:var(--blue);}
+.btn-sm{padding:6px 11px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);font-size:11.5px;cursor:pointer;color:var(--muted);font-family:inherit;}
+.btn-sm:hover{border-color:var(--blue);color:var(--blue);}
+.rc{font-size:11px;color:var(--muted);margin-left:auto;}
+
+/* ── TABLE VIEW */
+.tw{background:var(--surface);border:.5px solid var(--border);border-radius:9px;overflow:auto;max-height:calc(100vh - 290px);}
+table{width:100%;border-collapse:collapse;table-layout:fixed;}
+th{background:var(--light);padding:8px 10px;font-size:10px;font-weight:500;color:var(--muted);text-align:left;border-bottom:.5px solid var(--border);letter-spacing:.05em;text-transform:uppercase;position:sticky;top:0;z-index:5;}
+td{padding:8px 10px;border-bottom:.5px solid var(--border);vertical-align:middle;line-height:1.4;word-break:break-word;font-size:11.5px;}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#F9FAFC;cursor:pointer;}
+tr.changed td{background:#FFFDE7!important;}
+tr.changed-new td{background:#E8F5E9!important;}
+
+/* ── STATUS BADGES */
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;white-space:nowrap;}
+.badge::before{content:'';width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.7;}
+.b-mfg{background:#E8F4FD;color:#0070C0;}
+.b-fai{background:#E6F4EE;color:#00875A;}
+.b-ion{background:#FFF3E0;color:#C96000;}
+.b-app{background:#FFF8E1;color:#B07700;}
+.b-hold{background:#FEECEC;color:#C00000;}
+
+/* ── DUE DATE */
+.due{display:inline-block;font-size:10px;font-family:Calibri,monospace;padding:2px 6px;border-radius:4px;font-weight:500;}
+.du{background:#FEECEC;color:#C00000;}
+.ds{background:#FFF3E0;color:#C96000;}
+.do{background:#E6F4EE;color:#00875A;}
+.df{background:var(--light);color:var(--muted);}
+
+/* ── OUTSOURCE BADGES */
+.ob{display:inline-flex;align-items:center;font-size:9.5px;font-weight:500;padding:2px 6px;border-radius:4px;cursor:pointer;white-space:nowrap;margin:1px;}
+.ob:hover{opacity:.8;}
+.ob-leanteq{background:#EDE7F6;color:#6A1B9A;}
+.ob-richport{background:#E3F2FD;color:#1565C0;}
+.ob-uct{background:#F3E5F5;color:#7B1FA2;}
+.ob-ebw{background:#FFF8E1;color:#F57F17;}
+.ob-ano{background:#E8F5E9;color:#2E7D32;}
+.ob-coating{background:#FCE4EC;color:#C62828;}
+
+/* ── IMAGE CELL */
+.img-cell{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+.img-mini{width:34px;height:34px;border-radius:4px;object-fit:cover;border:.5px solid var(--border);cursor:pointer;}
+.img-mini:hover{transform:scale(1.1);}
+.img-add-btn{width:34px;height:34px;border:1.5px dashed var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:15px;background:var(--light);}
+.img-add-btn:hover{border-color:var(--blue);color:var(--blue);}
+
+/* ── KANBAN VIEW */
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:start;}
+.k-col{background:var(--surface);border:.5px solid var(--border);border-radius:9px;overflow:hidden;}
+.k-head{padding:10px 12px;font-size:11px;font-weight:500;display:flex;justify-content:space-between;align-items:center;border-bottom:.5px solid var(--border);}
+.k-head-mfg{background:#E8F4FD;color:#0070C0;}
+.k-head-fai{background:#E6F4EE;color:#00875A;}
+.k-head-ion{background:#FFF3E0;color:#C96000;}
+.k-head-app{background:#FFF8E1;color:#B07700;}
+.k-head-hold{background:#FEECEC;color:#C00000;}
+.k-count{font-size:10px;opacity:.7;}
+.k-body{padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px;max-height:calc(100vh - 300px);overflow-y:auto;}
+.k-card{background:var(--bg);border:.5px solid var(--border);border-radius:7px;padding:10px;cursor:pointer;transition:box-shadow .12s;}
+.k-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);}
+.k-card-pn{font-family:Calibri,monospace;font-size:10.5px;color:var(--muted);margin-bottom:3px;}
+.k-card-desc{font-size:11px;font-weight:500;margin-bottom:5px;line-height:1.35;}
+.k-card-foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:3px;}
+.k-card-bu{font-size:9.5px;background:var(--light);padding:1px 6px;border-radius:10px;color:var(--muted);}
+.k-card-changed{border-left:3px solid #FFC107;}
+.k-card-new{border-left:3px solid #4CAF50;}
+
+/* ── CALENDAR VIEW */
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.cal-nav{display:flex;gap:6px;align-items:center;}
+.cal-nav button{padding:5px 10px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-family:inherit;font-size:12px;}
+.cal-title{font-size:14px;font-weight:500;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day-hd{text-align:center;font-size:10px;font-weight:500;color:var(--muted);padding:5px;text-transform:uppercase;}
+.cal-day{background:var(--surface);border:.5px solid var(--border);border-radius:6px;padding:6px;min-height:70px;font-size:10px;}
+.cal-day.other-month{background:var(--bg);opacity:.5;}
+.cal-day.today{border-color:var(--navy);}
+.cal-day-num{font-weight:500;margin-bottom:3px;font-size:11px;}
+.cal-event{background:#E8F4FD;color:#0070C0;border-radius:3px;padding:1px 4px;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-event.urgent{background:#FEECEC;color:#C00000;}
+.cal-event.soon{background:#FFF3E0;color:#C96000;}
+
+/* ── TIMELINE VIEW */
+.timeline-wrap{overflow-x:auto;}
+.timeline-table{border-collapse:collapse;font-size:11px;white-space:nowrap;}
+.timeline-table th,.timeline-table td{border:.5px solid var(--border);padding:6px 8px;}
+.timeline-table th{background:var(--light);font-weight:500;font-size:10px;color:var(--muted);text-transform:uppercase;}
+.tl-part{min-width:120px;max-width:180px;white-space:normal;word-break:break-word;font-size:10.5px;}
+.tl-date{text-align:center;min-width:44px;}
+.tl-bar{background:var(--blue);border-radius:3px;height:18px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;}
+.tl-bar.done{background:var(--green);}
+.tl-bar.active{background:var(--amber);animation:pulse 1.5s infinite;}
+.tl-bar.hold{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ── PIPELINE VIEW */
+.pipeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.pipe-card{background:var(--surface);border:.5px solid var(--border);border-radius:9px;overflow:hidden;}
+.pipe-head{padding:10px 14px;font-size:12px;font-weight:500;color:#fff;}
+.pipe-head.MDP{background:#002060;}
+.pipe-head.DDP{background:#0070C0;}
+.pipe-head.ALD{background:#00875A;}
+.pipe-head.ETCH{background:#C96000;}
+.pipe-head.Others{background:#6B7280;}
+.pipe-body{padding:8px;}
+.pipe-item{display:flex;justify-content:space-between;align-items:center;padding:6px 6px;border-bottom:.5px solid var(--border);font-size:11px;}
+.pipe-item:last-child{border-bottom:none;}
+.pipe-pn{font-family:Calibri,monospace;font-size:10px;color:var(--muted);}
+.pipe-stat{font-size:9.5px;}
+
+/* ── HISTORY SIDEBAR */
+.history-log{display:flex;flex-direction:column;gap:8px;}
+.h-entry{background:var(--light);border-radius:7px;padding:10px 12px;position:relative;}
+.h-entry-date{font-size:10px;color:var(--muted);margin-bottom:3px;font-family:Calibri,monospace;}
+.h-entry-text{font-size:12px;line-height:1.5;}
+.h-entry-del{position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;}
+.h-entry-del:hover{color:var(--red);}
+.h-add{display:flex;gap:6px;margin-top:10px;}
+.h-add textarea{flex:1;padding:7px 9px;border:.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;min-height:60px;outline:none;}
+.h-add textarea:focus{border-color:var(--blue);}
+.h-add-btn{padding:6px 12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:inherit;align-self:flex-end;}
+
+/* ── MODALS */
+.drop-ov{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,32,96,.88);align-items:center;justify-content:center;}
+.drop-ov.on{display:flex;}
+.drop-box{border:2px dashed rgba(255,255,255,.45);border-radius:14px;padding:56px 72px;text-align:center;color:#fff;}
+.modal-bg{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.4);align-items:center;justify-content:center;}
+.modal-bg.on{display:flex;}
+.modal{background:var(--surface);border-radius:12px;padding:22px 24px;width:500px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.15);max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:14px;font-weight:500;margin-bottom:4px;}
+.modal-sub{font-size:11.5px;color:var(--muted);margin-bottom:16px;}
+.col-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:16px;align-items:center;}
+.col-grid span{font-size:11.5px;font-weight:500;color:var(--muted);}
+.col-grid select{width:100%;padding:5px 7px;border:.5px solid var(--border);border-radius:5px;font-size:11.5px;font-family:inherit;}
+.modal-actions{display:flex;gap:7px;justify-content:flex-end;}
+.btn-p{padding:6px 16px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:12px;font-family:inherit;cursor:pointer;}
+.btn-s{padding:6px 16px;background:transparent;color:var(--muted);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;cursor:pointer;}
+.img-modal-bg{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.4);align-items:center;justify-content:center;}
+.img-modal-bg.on{display:flex;}
+.img-modal{background:var(--surface);border-radius:12px;padding:18px;max-width:680px;width:95vw;max-height:90vh;overflow-y:auto;}
+.img-m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px;}
+.img-thumb{position:relative;border:.5px solid var(--border);border-radius:7px;overflow:hidden;aspect-ratio:1;cursor:pointer;background:var(--light);}
+.img-thumb img{width:100%;height:100%;object-fit:cover;}
+.img-del{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:3px;font-size:9.5px;padding:1px 4px;cursor:pointer;display:none;}
+.img-thumb:hover .img-del{display:block;}
+.fs-bg{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.9);align-items:center;justify-content:center;}
+.fs-bg.on{display:flex;}
+.fs-bg img{max-width:92vw;max-height:92vh;border-radius:8px;}
+.fs-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;}
+.out-modal-bg{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);align-items:center;justify-content:center;}
+.out-modal-bg.on{display:flex;}
+.out-modal{background:var(--surface);border-radius:12px;padding:20px 22px;max-width:440px;width:95vw;}
+.out-item{background:var(--light);border-radius:7px;padding:9px 12px;margin-bottom:7px;}
+.out-lbl{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.out-val{font-size:12.5px;font-weight:500;}
+
+/* ── EMPTY */
+.empty{padding:48px;text-align:center;color:var(--muted);font-size:13px;}
+.footer{padding:12px 0;border-top:.5px solid var(--border);display:flex;justify-content:space-between;margin-top:16px;}
+.ft{font-size:10.5px;color:var(--muted);}
+.img-file-input{display:none;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="h-left">
+    <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMjAgNjUiIHdpZHRoPSIxMTAiIGhlaWdodD0iMzIiPgogIDxyZWN0IHg9IjAiIHk9IjIiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjEuNSIgZmlsbD0iIzJFNkRCNCIvPgogIDxyZWN0IHg9IjAiIHk9IjI0IiB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHJ4PSIxLjUiIGZpbGw9IiMzQUFBMzUiLz4KICA8dGV4dCB4PSIyNiIgeT0iMzQiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjM0IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjRkZGRkZGIiBsZXR0ZXItc3BhY2luZz0iLTAuNSI+SGFuc29sPC90ZXh0PgogIDx0ZXh0IHg9IjI2IiB5PSI1NCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIiBmb250LXdlaWdodD0iNDAwIiBmaWxsPSIjOEZBOEM4IiBsZXR0ZXItc3BhY2luZz0iMC41Ij7tlZzshpTslYTsnbTsm5DsiqQ8L3RleHQ+Cjwvc3ZnPg==" style="height:38px;width:auto;display:block;" alt="Hansol IONES"/>
+    <div class="h-div"></div>
+    <span class="h-title">NPI Development Dashboard</span>
+  </div>
+  <span class="h-date" id="hdate"></span>
+</header>
+
+<!-- RISK BANNER (Feature 5) -->
+<div class="risk-banner" id="risk-banner">
+  <div class="risk-title">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    즉시 확인 필요
+  </div>
+  <div class="risk-items" id="risk-items"></div>
+</div>
+
+<!-- UPLOAD BAR -->
+<div class="upload-bar">
+  <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    엑셀 업로드
+  </button>
+  <span class="upload-hint">NPI List 엑셀 파일 — 드래그 앤 드롭 가능 | 새 버전 업로드 시 변경사항 자동 하이라이트</span>
+  <span class="ustatus" id="ustatus"></span>
+  <input type="file" id="file-input" accept=".xlsx,.xls"/>
+</div>
+
+<!-- VIEW TABS -->
+<div class="view-bar">
+  <div class="view-tab active" id="tab-table" onclick="switchView('table')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+    테이블
+  </div>
+  <div class="view-tab" id="tab-kanban" onclick="switchView('kanban')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="10.5" y="3" width="6" height="11" rx="1"/><rect x="18" y="3" width="3" height="7" rx="1"/></svg>
+    Kanban
+  </div>
+
+  <div class="view-tab" id="tab-calendar" onclick="switchView('calendar')">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    캘린더
+  </div>
+
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+  <div class="content-area" id="content-area">
+
+    <!-- STAT CARDS -->
+    <div class="stat-grid">
+      <div class="sc total" id="card-total" onclick="filterByStatus('')">
+        <div class="sv" id="cnt-total">0</div><div class="sl">Total NPI Parts</div><div class="ss">개발 관리 중인 파트</div>
+      </div>
+      <div class="sc mfg" id="card-mfg" onclick="filterByStatus('mfg')">
+        <div class="sv" id="cnt-mfg" style="color:var(--blue)">0</div><div class="sl">Manufacturing</div><div class="ss">제작 진행 중</div>
+      </div>
+      <div class="sc fai" id="card-fai" onclick="filterByStatus('fai')">
+        <div class="sv" id="cnt-fai" style="color:var(--green)">0</div><div class="sl">FAI Contingent</div><div class="ss">FAI 조건부 승인</div>
+      </div>
+      <div class="sc act" id="card-act" onclick="filterByStatus('action')">
+        <div class="sv" id="cnt-act" style="color:var(--amber)">0</div><div class="sl">Action Required</div><div class="ss">IONES / Applied</div>
+      </div>
+      <div class="sc hold" id="card-hold" onclick="filterByStatus('hold')">
+        <div class="sv" id="cnt-hold" style="color:var(--red)">0</div><div class="sl">On Hold</div><div class="ss">일정 중단</div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar" id="toolbar">
+      <div class="sw">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="f-search" placeholder="P/N 또는 Description 검색..."/>
+      </div>
+      <select id="f-bu"><option value="">전체 BU</option></select>
+      <select id="f-status">
+        <option value="">전체 Status</option>
+        <option value="Manufacturing in process">Manufacturing</option>
+        <option value="FAI contingent">FAI Contingent</option>
+        <option value="IONES action required">IONES Action</option>
+        <option value="Applied response pending">Applied Pending</option>
+        <option value="Hold">Hold</option>
+      </select>
+      <select id="f-out">
+        <option value="">전체 외주</option>
+        <option value="Leanteq">Leanteq</option>
+        <option value="Richport">Richport</option>
+        <option value="UCT">UCT</option>
+        <option value="EBW">EBW</option>
+        <option value="ANO">ANO</option>
+      </select>
+      <select id="f-due">
+        <option value="">전체 마감일</option>
+        <option value="urgent">3일 이내</option>
+        <option value="soon">7일 이내</option>
+        <option value="month">이번 달</option>
+      </select>
+      <button class="btn-sm" onclick="resetF()">초기화</button>
+      <span class="rc" id="rc"></span>
+    </div>
+
+    <!-- VIEW CONTAINERS -->
+    <div id="view-table">
+      <div class="tw">
+        <table>
+          <colgroup><col style="width:36px"><col style="width:50px"><col style="width:112px"><col style="width:19%"><col style="width:112px"><col><col style="width:90px"><col style="width:60px"><col style="width:75px"><col style="width:68px"></colgroup>
+          <thead><tr><th>No.</th><th>BU</th><th>P/N</th><th>Description</th><th>Status</th><th>Action Item</th><th>외주 공정</th><th>Due</th><th>담당자</th><th>이미지</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="empty" id="empty-table" style="display:none">검색 결과가 없습니다</div>
+      </div>
+    </div>
+    <div id="view-kanban" style="display:none"></div>
+    <div id="view-calendar" style="display:none"></div>
+
+    <footer class="footer">
+      <span class="ft">Hansol IONES — NPI Team | 내부 배포용</span>
+      <span class="ft" id="fdate"></span>
+    </footer>
+  </div>
+
+  <!-- HISTORY SIDEBAR (Feature 6) -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-inner">
+      <button class="sidebar-close" onclick="closeSidebar()">×</button>
+      <div class="sidebar-title" id="sb-title">히스토리</div>
+      <div class="sidebar-pn" id="sb-pn"></div>
+      <div class="history-log" id="history-log"></div>
+      <div class="h-add">
+        <textarea id="h-textarea" placeholder="메모 추가..."></textarea>
+        <button class="h-add-btn" onclick="addHistory()">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- PART DETAIL MODAL -->
+<div class="modal-bg" id="detail-modal-bg" onclick="if(event.target===this)closeDetailModal()">
+  <div class="modal" style="width:580px;max-width:96vw;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+      <div>
+        <div style="font-family:Calibri,monospace;font-size:11px;color:var(--muted);margin-bottom:3px;" id="dm-pn"></div>
+        <div style="font-size:14px;font-weight:500;" id="dm-desc"></div>
+      </div>
+      <button style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted);margin-left:12px;" onclick="closeDetailModal()">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;" id="dm-grid"></div>
+    <div style="background:var(--light);border-radius:8px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:5px;font-weight:500;">ACTION ITEM</div>
+      <div style="font-size:12.5px;line-height:1.6;" id="dm-action"></div>
+    </div>
+    <div id="dm-out" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn-s" onclick="closeDetailModal()">닫기</button>
+      <button class="btn-p" onclick="openSidebarFromDetail()">히스토리 메모 열기</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="drop-ov" id="drop-ov"><div class="drop-box"><div style="font-size:18px;font-weight:500;margin-bottom:7px">파일을 놓으세요</div><div style="font-size:12px;opacity:.6">.xlsx / .xls NPI List</div></div></div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-title">컬럼 매핑</div>
+    <div class="modal-sub">엑셀 컬럼과 대시보드 항목을 연결해주세요</div>
+    <div class="col-grid" id="col-grid"></div>
+    <div class="modal-actions">
+      <button class="btn-s" onclick="closeModal()">취소</button>
+      <button class="btn-p" onclick="applyMap()">적용</button>
+    </div>
+  </div>
+</div>
+
+<div class="img-modal-bg" id="img-modal-bg">
+  <div class="img-modal">
+    <div class="img-m-head">
+      <span style="font-size:13px;font-weight:500" id="img-modal-title">이미지</span>
+      <button style="background:none;border:none;cursor:pointer;font-size:17px;color:var(--muted)" onclick="closeImgModal()">×</button>
+    </div>
+    <div class="img-grid" id="img-grid"></div>
+    <button class="upload-btn" onclick="document.getElementById('img-file-input').click()" style="font-size:11.5px">이미지 추가</button>
+    <input type="file" id="img-file-input" accept="image/*" multiple class="img-file-input"/>
+  </div>
+</div>
+
+<div class="out-modal-bg" id="out-modal-bg">
+  <div class="out-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;">
+      <span style="font-size:13px;font-weight:500" id="out-modal-title">외주 공정</span>
+      <button style="background:none;border:none;cursor:pointer;font-size:17px;color:var(--muted)" onclick="document.getElementById('out-modal-bg').classList.remove('on')">×</button>
+    </div>
+    <div id="out-modal-body"></div>
+  </div>
+</div>
+
+<div class="fs-bg" id="fs-bg" onclick="this.classList.remove('on')">
+  <button class="fs-close" onclick="document.getElementById('fs-bg').classList.remove('on')">×</button>
+  <img id="fs-img" src="" alt=""/>
+</div>
+
+<script>
+let DATA = [
+  {no:1,bu:"MDP",pn:"0041-83133",desc:"LINER UPPER THICK Y2O3 1.44 SVO 300MM",status:"Manufacturing in process",action:"Coupon 및 EBW test 진행 / 본품 제작 일정 수립 필요",due:"4/24",poc:"조요한"},
+  {no:2,bu:"ETCH",pn:"0023-41077",desc:"LINER, TSGD WIDE, RK SLIT",status:"Manufacturing in process",action:"가공 일정 수립 필요",due:"",poc:"민문기"},
+  {no:3,bu:"DDP",pn:"0042-23723",desc:"FACEPLATE, COATED DIRECT COOLED FRONTIER, PRODUCER GT",status:"Manufacturing in process",action:"3rd batch drill test / flow test 진행 및 결과 공유",due:"",poc:"조요한"},
+  {no:4,bu:"ETCH",pn:"0023-41077",desc:"SLIT LINER DOOR, SB",status:"Manufacturing in process",action:"Ano test 6/10 완료 예정",due:"6/10",poc:"민문기"},
+  {no:5,bu:"ETCH",pn:"0043-08047",desc:"CATHODE SLEEVE, BLACKSTONE",status:"Manufacturing in process",action:"6/2 Applied 납품",due:"6/2",poc:"신효정"},
+  {no:6,bu:"ALD",pn:"0042-62990",desc:"CLAMP RING, COATED, SHROUDED, MW, MR123",status:"IONES action required",action:"SNF 제출 및 PO 접수",due:"",poc:"조요한"},
+  {no:7,bu:"DDP",pn:"0043-23040",desc:"METAL PUMPING PLATE, PRECISION XP",status:"Manufacturing in process",action:"5/8 PEC 납품 예정",due:"5/8",poc:"조요한"},
+  {no:8,bu:"DDP",pn:"0023-62653",desc:"CIP 5 LINER, SIDE 1, BTM, SIGNET, PRECSION XP",status:"Manufacturing in process",action:"4/24 PEC 납품 예정",due:"4/24",poc:"조요한"},
+  {no:9,bu:"DDP",pn:"0023-62654",desc:"CIP 5 LINER, SIDE 2, BTM, SIGNET, PRECSION XP",status:"Manufacturing in process",action:"4/24 PEC 납품 예정",due:"4/24",poc:"조요한"},
+  {no:10,bu:"MDP",pn:"0023-53114",desc:"DEP RING, TITANIUM, PVD 300MM",status:"IONES action required",action:"소재 입고 후 제작 일정 수립",due:"",poc:"조요한"},
+  {no:11,bu:"MDP",pn:"0023-56687",desc:"DEP RING, TITANIUM, OCAL, PVD 300MM",status:"IONES action required",action:"소재 입고 후 제작 일정 수립",due:"",poc:"조요한"},
+  {no:12,bu:"MDP",pn:"0023-57243",desc:"DEP RING, TITANIUM, OCAL ANGLED, PVD 300MM",status:"IONES action required",action:"소재 입고 후 제작 일정 수립",due:"",poc:"민문기"},
+  {no:13,bu:"DDP",pn:"0042-64935",desc:"OUTPUT MANIFOLD COMMON LID, PEALD W/IN",status:"IONES action required",action:"도면 검토 후 통이사항 확인 및 일정 수립",due:"",poc:"조요한"},
+  {no:14,bu:"DDP",pn:"0042-64936",desc:"OUTPUT MANIFOLD COMMON LID, PEALD W/IN",status:"IONES action required",action:"도면 검토 후 통이사항 확인 및 일정 수립",due:"",poc:"조요한"},
+  {no:15,bu:"MDP",pn:"0041-58619",desc:"EXTENSION, .50 SPACER",status:"Applied response pending",action:"P2P2 승인 후 FAI 제출",due:"",poc:"조요한"},
+  {no:16,bu:"MDP",pn:"0022-04466",desc:"SHIELD, 1-PIECE, VERSA, PERF. 50MM SP, 3",status:"Applied response pending",action:"P2P2 승인 후 FAI 제출",due:"",poc:"조요한"},
+  {no:17,bu:"MDP",pn:"0042-53336",desc:"PUMPING PLATE, COATED, SINGEN, LPCVD, 30",status:"Applied response pending",action:"고객사 피드백 회신 후 FAI 제출",due:"",poc:"민문기"},
+  {no:18,bu:"MDP",pn:"0041-00187",desc:"GAS RING, SYM 36 PORT GAS DIST. 300MM HDPCVD",status:"Applied response pending",action:"도면 변경 여부 고객사 컨펌 후 본품 제작",due:"",poc:"조요한"},
+  {no:19,bu:"ALD",pn:"0042-65126",desc:"SHAFT, SHIELD ASSEMBLY, SG 45, NHP",status:"Applied response pending",action:"ESW 발행 후 FAI 제출",due:"",poc:"조요한"},
+  {no:20,bu:"MDP",pn:"0021-44431",desc:"HSR, SHIELD OUTER, 300MM ALD-TIN",status:"Applied response pending",action:"Rev 08 도면 접수 및 FAI 제출 준비",due:"",poc:"조요한"},
+  {no:21,bu:"DDP",pn:"0043-02365",desc:"CENTER, GAS FEED, 300MM HDPCVD ULTIMA X",status:"Applied response pending",action:"도면 접수 및 ESW 발행 후 FAI 제출",due:"",poc:"민문기"},
+  {no:22,bu:"MDP",pn:"0023-57360",desc:"COVER RING, CLEANCOAT, ANGLED CR, 300MM",status:"IONES action required",action:"도면 검토 후 통이사항 확인 및 일정 수립",due:"",poc:"조요한"},
+  {no:23,bu:"ALD",pn:"0023-02961",desc:"RPS EXTENSION, KF40, NO PRG, ALD",status:"Applied response pending",action:"도면 접수 후 제작 일정 수립",due:"",poc:"조요한"},
+  {no:24,bu:"MDP",pn:"0023-34514",desc:"PUMPING PLATE, 200MM, SINGEN/OXZGEN",status:"Manufacturing in process",action:"Leanteq 공정 완료 후 제품 자사 입고 및 P2P2 진행",due:"5/18",poc:"조요한"},
+  {no:25,bu:"MDP",pn:"0023-34507",desc:"PUMPING PLATE, 200MM POLYGEN",status:"Manufacturing in process",action:"Leanteq 공정 완료 후 제품 자사 입고 및 P2P2 진행",due:"5/18",poc:"조요한"},
+  {no:26,bu:"MDP",pn:"0020-99248",desc:"SHIELD, INNER, ADVANCED TI, ENDURA 2, 30",status:"Manufacturing in process",action:"6/8 제작 완료 후 P2P2 진행",due:"6/8",poc:"조요한"},
+  {no:27,bu:"DDP",pn:"0043-07336",desc:"GAS BOX, CHAMBER LID, 200MM HARP, SACVD",status:"Manufacturing in process",action:"7/1 제작 완료 후 P2P2 진행",due:"7/1",poc:"민문기"},
+  {no:28,bu:"MDP",pn:"0020-43035",desc:"PEDESTAL COVER A101, 300MM, TAN, 3 BOSSE",status:"Manufacturing in process",action:"6/23 제작 완료 후 Leanteq 출하",due:"6/23",poc:"조요한"},
+  {no:29,bu:"ALD",pn:"0042-32794",desc:"PUMPING RING, V2.4, SINGLE BORE, TOP, COATED, ALD",status:"Manufacturing in process",action:"5/11 제작 완료 후 PEC 출하",due:"5/11",poc:"조요한"},
+  {no:30,bu:"ALD",pn:"0043-21023",desc:"PUMPING PLATE 300MM CVD/ALD, WATSON",status:"Manufacturing in process",action:"5/6 제작 완료 후 Applied 납품 — 부적합 1개 Leanteq 확인 중",due:"5/6",poc:"조요한"},
+  {no:31,bu:"DDP",pn:"0022-41330",desc:"CHAMBER LINER, UPPER, SIDEWALL, PRECISION",status:"Manufacturing in process",action:"5/30 Applied 납품",due:"5/30",poc:"민문기"},
+  {no:32,bu:"DDP",pn:"0022-41333",desc:"CHAMBER LINER, INNER, PRECISION",status:"Manufacturing in process",action:"5/30 Applied 납품",due:"5/30",poc:"민문기"},
+  {no:33,bu:"DDP",pn:"0042-61955",desc:"INPUT MANIFOLD, CHAMBER BODY, PRODUCER G",status:"Manufacturing in process",action:"5/30 Applied 납품",due:"5/30",poc:"조요한"},
+  {no:34,bu:"DDP",pn:"0043-18946",desc:"CENTER, GAS FEED, 300MM HDPCVD ULTIMA X",status:"Manufacturing in process",action:"4/23 FAI 제출",due:"4/23",poc:"민문기"},
+  {no:35,bu:"MDP",pn:"0023-59183",desc:"SHIELD, SMALL ID, 1-PIECE, CLEANCOAT VERSA",status:"Manufacturing in process",action:"5/15 Applied 납품",due:"5/15",poc:"조요한"},
+  {no:36,bu:"MDP",pn:"0041-34830",desc:"LINER, LOWER, VENTED, WxZ, 300MM",status:"Manufacturing in process",action:"P2P report 제출",due:"5/8",poc:"조요한"},
+  {no:37,bu:"DDP",pn:"0042-64801",desc:"TOP PLATE, RPS BFC, KODIAK",status:"Manufacturing in process",action:"4/30 Applied 납품",due:"4/30",poc:"민문기"},
+  {no:38,bu:"DDP",pn:"0042-64806",desc:"BOTTOM PLATE, RPS BFC, KODIAK",status:"Manufacturing in process",action:"5/30 Applied 납품",due:"5/30",poc:"민문기"},
+  {no:39,bu:"MDP",pn:"0042-36419",desc:"PUMPING PLATE, RAISED CHAMBER, DNP, CVD",status:"Hold",action:"Richport SNF qual 대기 중",due:"~5/30",poc:"조요한"},
+  {no:40,bu:"DDP",pn:"0042-95743",desc:"COOLING BASE HTR LIFT, PRODUCER GT TEOS",status:"Hold",action:"RM 사양 관련 고객사 컨펌 필요",due:"",poc:"민문기"},
+  {no:41,bu:"DDP",pn:"0042-06842",desc:"LINER, SLIT DOOR, PIONEER",status:"FAI contingent",action:"추가 Qual 용 추가 제품 제작 후 납품 예정",due:"",poc:"세정코팅기술"},
+  {no:42,bu:"DDP",pn:"0022-06335",desc:"CHAMBER LINER, SIDEWALL, LOWER, SR, PROD",status:"FAI contingent",action:"추가 Qual 용 추가 제품 제작 후 납품 예정",due:"",poc:"조요한"},
+  {no:43,bu:"ALD",pn:"0023-40452",desc:"TOP PLATE, PUMPING, T2, E2, PURGED",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:44,bu:"ALD",pn:"0043-19604",desc:"FUNNEL, HVM HYBRID LID, WATSON, NTN COATED, 300MM",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"6/8",poc:"조요한"},
+  {no:45,bu:"ALD",pn:"0043-19921",desc:"PUMPING PLATE 300MM CVD/ALD, NTN COATED, WATSON",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"6/8",poc:"조요한"},
+  {no:46,bu:"ALD",pn:"0023-57415",desc:"CLAMPING PLATE, SHOWERHEAD, WATSON, NTN COATED, 300MM",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:47,bu:"MDP",pn:"0022-45690",desc:"CHOKE RING, COATED, SINGEN, LPCVD",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:48,bu:"MDP",pn:"0022-03729",desc:"DISK, SHUTTER, EXTENDED, ESC, CENTER PIN",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:49,bu:"Others",pn:"0021-31804",desc:"DOOR, ACP ANODIZED SLIT VALVE",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:50,bu:"MDP",pn:"0041-79924",desc:"GASBOX, LARGE ELECTRODE, LID MOUNTED",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:51,bu:"MDP",pn:"0021-81423",desc:"EDGE RING, ALUM, SST HEATER 300MM TXZ",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+  {no:52,bu:"MDP",pn:"0022-07335",desc:"RING, SPACER, SPIRAL LID, MALD",status:"FAI contingent",action:"FAI 조건부 승인 후 고객사 Qual 대기",due:"",poc:"조요한"},
+];
+
+
+// ── STATE
+let activeCard = '';
+let currentView = 'table';
+let excelHeaders = [], excelRows = [];
+let prevData = null; // For change highlight (Feature 7)
+let changedPns = new Set();
+let newPns = new Set();
+const IMG_STORE = {};
+const HISTORY_STORE = {};
+let currentSidebarPn = null;
+let currentImgPn = null;
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+const TODAY = new Date();
+
+const FIELDS = {no:'No.',bu:'BU',pn:'P/N',desc:'Description',status:'Status',action:'Action Item',out:'외주 공정',due:'Due',poc:'담당자'};
+
+// ── OUTSOURCE DETECTION
+const OUT_VENDORS = [
+  {key:'Leanteq', cls:'ob-leanteq', kw:['leanteq','린텍']},
+  {key:'Richport',cls:'ob-richport',kw:['richport','리치포트']},
+  {key:'UCT',     cls:'ob-uct',     kw:['uct']},
+  {key:'EBW',     cls:'ob-ebw',     kw:['ebw','electron beam']},
+  {key:'ANO',     cls:'ob-ano',     kw:['ano test','anodiz','양극산화']},
+  {key:'Coating', cls:'ob-coating', kw:['coating','세정코팅','코팅']},
+];
+function detectOut(p) {
+  const txt = ((p.action||'')+(p.status||'')+(p.out||'')).toLowerCase();
+  return OUT_VENDORS.filter(v => v.kw.some(k => txt.includes(k)));
+}
+function outBadgesHtml(p) {
+  const vs = detectOut(p);
+  if (!vs.length) return '<span style="font-size:10px;color:var(--muted)">—</span>';
+  return vs.map(v=>`<span class="ob ${v.cls}" onclick="showOut(event,'${p.pn}')">${v.key}</span>`).join('');
+}
+function showOut(e, pn) {
+  e.stopPropagation();
+  const p = DATA.find(d=>d.pn===pn); if(!p) return;
+  const vs = detectOut(p);
+  document.getElementById('out-modal-title').textContent = p.pn+' — 외주 공정';
+  document.getElementById('out-modal-body').innerHTML = vs.map(v=>`<div class="out-item"><div class="out-lbl">외주 업체</div><div class="out-val">${v.key}</div></div>`).join('')+
+    `<div class="out-item" style="margin-top:8px"><div class="out-lbl">Action Item</div><div class="out-val" style="font-weight:400;font-size:11.5px">${p.action||'—'}</div></div>`+
+    (p.out?`<div class="out-item"><div class="out-lbl">외주 (엑셀)</div><div class="out-val">${p.out}</div></div>`:'');
+  document.getElementById('out-modal-bg').classList.add('on');
+}
+
+// ── STATUS HELPERS
+function sGroup(s){
+  if(!s)return''; const sl=s.toLowerCase();
+  if(sl.includes('manufacturing'))return'mfg';
+  if(sl.includes('fai contingent')||sl.includes('fai 조건'))return'fai';
+  if(sl.includes('iones')||sl.includes('applied'))return'action';
+  if(sl.includes('hold'))return'hold';
+  return'';
+}
+function sBadge(s){
+  if(!s)return''; const sl=s.toLowerCase();
+  let c='',l=s;
+  if(sl.includes('manufacturing')){c='b-mfg';l='Manufacturing';}
+  else if(sl.includes('fai contingent')||sl.includes('fai 조건')){c='b-fai';l='FAI Contingent';}
+  else if(sl.includes('iones')){c='b-ion';l='IONES Action';}
+  else if(sl.includes('applied')){c='b-app';l='Applied Pending';}
+  else if(sl.includes('hold')){c='b-hold';l='Hold';}
+  return`<span class="badge ${c}">${l}</span>`;
+}
+function parseDue(d){
+  if(!d)return null;
+  const p=d.toString().replace('~','').trim().split('/');
+  if(p.length<2)return null;
+  const dt=new Date(TODAY.getFullYear(),parseInt(p[0])-1,parseInt(p[1]));
+  return isNaN(dt.getTime())?null:dt;
+}
+function dueBadge(d){
+  if(!d)return'<span style="color:var(--muted);font-size:10px">—</span>';
+  const dt=parseDue(d); if(!dt)return`<span class="due df">${d}</span>`;
+  const days=Math.ceil((dt-TODAY)/86400000);
+  const c=days<=3?'du':days<=7?'ds':days<=31?'do':'df';
+  return`<span class="due ${c}">${d}</span>`;
+}
+function dueClass(d){
+  const dt=parseDue(d); if(!dt)return'';
+  const days=Math.ceil((dt-TODAY)/86400000);
+  return days<=3?'urgent':days<=7?'soon':'';
+}
+
+// ── IMAGE HELPERS
+function imgCell(pn){
+  const imgs=IMG_STORE[pn]||[];
+  const thumbs=imgs.slice(0,2).map((src,i)=>`<img class="img-mini" src="${src}" onclick="event.stopPropagation();openFs('${pn}',${i})">`).join('');
+  const more=imgs.length>2?`<span style="font-size:9.5px;color:var(--muted)">+${imgs.length-2}</span>`:'';
+  return`<div class="img-cell">${thumbs}${more}<div class="img-add-btn" onclick="event.stopPropagation();openImgModal('${pn}')">+</div></div>`;
+}
+function openImgModal(pn){
+  currentImgPn=pn; const p=DATA.find(d=>d.pn===pn);
+  document.getElementById('img-modal-title').textContent=(p?p.pn:pn)+' — 이미지';
+  renderImgGrid(); document.getElementById('img-modal-bg').classList.add('on');
+}
+function closeImgModal(){ document.getElementById('img-modal-bg').classList.remove('on'); currentImgPn=null; applyFilter(); }
+function renderImgGrid(){
+  const imgs=IMG_STORE[currentImgPn]||[];
+  document.getElementById('img-grid').innerHTML=imgs.map((src,i)=>`<div class="img-thumb"><img src="${src}" onclick="openFs('${currentImgPn}',${i})"><button class="img-del" onclick="delImg(${i})">삭제</button></div>`).join('');
+}
+function delImg(i){ if(!currentImgPn)return; (IMG_STORE[currentImgPn]||[]).splice(i,1); renderImgGrid(); }
+function openFs(pn,idx){ const imgs=IMG_STORE[pn]||[]; if(!imgs[idx])return; document.getElementById('fs-img').src=imgs[idx]; document.getElementById('fs-bg').classList.add('on'); }
+document.getElementById('img-file-input').addEventListener('change',function(e){
+  const files=Array.from(e.target.files); if(!currentImgPn||!files.length)return;
+  if(!IMG_STORE[currentImgPn])IMG_STORE[currentImgPn]=[];
+  let n=0; files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>{ IMG_STORE[currentImgPn].push(ev.target.result); if(++n===files.length)renderImgGrid(); }; r.readAsDataURL(f); });
+  this.value='';
+});
+
+// ── HISTORY SIDEBAR (Feature 6)
+function openSidebar(pn){
+  currentSidebarPn=pn; const p=DATA.find(d=>d.pn===pn)||{};
+  document.getElementById('sb-title').textContent=p.desc||pn;
+  document.getElementById('sb-pn').textContent=pn;
+  renderHistory(); document.getElementById('sidebar').classList.add('open');
+}
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); currentSidebarPn=null; }
+function renderHistory(){
+  const logs=HISTORY_STORE[currentSidebarPn]||[];
+  document.getElementById('history-log').innerHTML=logs.length?
+    logs.map((e,i)=>`<div class="h-entry"><div class="h-entry-date">${e.date}</div><div class="h-entry-text">${e.text}</div><button class="h-entry-del" onclick="delHistory(${i})">×</button></div>`).join(''):
+    '<div style="font-size:11.5px;color:var(--muted);text-align:center;padding:20px 0">메모가 없습니다</div>';
+}
+function addHistory(){
+  const ta=document.getElementById('h-textarea'); const txt=ta.value.trim(); if(!txt||!currentSidebarPn)return;
+  if(!HISTORY_STORE[currentSidebarPn])HISTORY_STORE[currentSidebarPn]=[];
+  HISTORY_STORE[currentSidebarPn].unshift({date:new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),text:txt});
+  ta.value=''; renderHistory();
+}
+function delHistory(i){ (HISTORY_STORE[currentSidebarPn]||[]).splice(i,1); renderHistory(); }
+
+// ── RISK BANNER (Feature 5)
+function updateRiskBanner(data){
+  const risks=data.filter(p=>{
+    const dt=parseDue(p.due); const days=dt?Math.ceil((dt-TODAY)/86400000):null;
+    return (days!==null&&days<=3)||(p.status||'').toLowerCase().includes('hold');
+  });
+  const banner=document.getElementById('risk-banner');
+  if(!risks.length){banner.classList.remove('show');return;}
+  banner.classList.add('show');
+  document.getElementById('risk-items').innerHTML=risks.slice(0,8).map(p=>{
+    const dt=parseDue(p.due); const days=dt?Math.ceil((dt-TODAY)/86400000):null;
+    const reason=p.status.toLowerCase().includes('hold')?'HOLD':(days!==null&&days<=0)?'마감 초과':`D-${days}`;
+    return`<div class="risk-item" onclick="openSidebar('${p.pn}')"><span class="ri-pn">${p.pn}</span><span class="ri-info">${reason}</span></div>`;
+  }).join('');
+}
+
+// ── COUNTS
+function updateCounts(data){
+  // Cards always show full DATA counts
+  const c={mfg:0,fai:0,action:0,hold:0};
+  DATA.forEach(p=>{const g=sGroup(p.status);if(g&&c[g]!==undefined)c[g]++;});
+  document.getElementById('cnt-total').textContent=DATA.length;
+  document.getElementById('cnt-mfg').textContent=c.mfg;
+  document.getElementById('cnt-fai').textContent=c.fai;
+  document.getElementById('cnt-act').textContent=c.action;
+  document.getElementById('cnt-hold').textContent=c.hold;
+  // rc shows filtered count
+  document.getElementById('rc').textContent=data.length+'개 파트';
+}
+
+// ── TABLE VIEW (Feature 1 - base)
+function renderTable(data){
+  const tb=document.getElementById('tbody');
+  const em=document.getElementById('empty-table');
+  if(!data.length){tb.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  tb.innerHTML=data.map((p,i)=>{
+    const isNew=newPns.has(p.pn);
+    const isChanged=changedPns.has(p.pn);
+    const rowCls=isNew?'changed-new':isChanged?'changed':'';
+    return`<tr class="${rowCls}" onclick="openSidebar('${p.pn}')">
+      <td style="font-size:10px;color:var(--muted);font-family:Calibri,monospace">${p.no||i+1}</td>
+      <td style="font-size:10.5px;font-weight:500;color:var(--navy)">${p.bu||'—'}</td>
+      <td style="font-size:10px;font-family:Calibri,monospace;color:var(--muted)">${p.pn||'—'}</td>
+      <td>${p.desc||'—'}</td>
+      <td>${sBadge(p.status)}</td>
+      <td style="font-size:11px">${p.action||'—'}${p.due?'<br>'+dueBadge(p.due):''}</td>
+      <td>${outBadgesHtml(p)}</td>
+      <td>${p.due?dueBadge(p.due):'<span style="color:var(--muted);font-size:10px">—</span>'}</td>
+      <td style="font-size:10.5px;color:var(--muted)">${p.poc||'—'}</td>
+      <td onclick="event.stopPropagation()">${imgCell(p.pn)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── KANBAN VIEW (Feature 1)
+function renderKanban(data){
+  const cols=[
+    {id:'mfg',label:'Manufacturing',hdCls:'k-head-mfg',statuses:['Manufacturing in process']},
+    {id:'fai',label:'FAI Contingent',hdCls:'k-head-fai',statuses:['FAI contingent']},
+    {id:'ion',label:'IONES Action',hdCls:'k-head-ion',statuses:['IONES action required']},
+    {id:'app',label:'Applied Pending',hdCls:'k-head-app',statuses:['Applied response pending']},
+    {id:'hold',label:'Hold',hdCls:'k-head-hold',statuses:['Hold']},
+  ];
+  document.getElementById('view-kanban').innerHTML=`<div class="kanban">${cols.map(col=>{
+    const items=data.filter(p=>col.statuses.includes(p.status));
+    return`<div class="k-col">
+      <div class="k-head ${col.hdCls}">${col.label}<span class="k-count">${items.length}</span></div>
+      <div class="k-body">${items.map(p=>`
+        <div class="k-card ${newPns.has(p.pn)?'k-card-new':changedPns.has(p.pn)?'k-card-changed':''}" onclick="openDetailModal('${p.pn}')">
+          <div class="k-card-pn">${p.pn}</div>
+          <div class="k-card-desc">${p.desc||'—'}</div>
+          <div class="k-card-foot">
+            <span class="k-card-bu">${p.bu||''}</span>
+            ${p.due?dueBadge(p.due):''}
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── CALENDAR VIEW (Feature 3)
+function renderCalendar(){
+  const data=getFiltered();
+  const firstDay=new Date(calYear,calMonth,1);
+  const lastDay=new Date(calYear,calMonth+1,0);
+  const startDow=firstDay.getDay();
+  const daysInMonth=lastDay.getDate();
+  const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const days=['일','월','화','수','목','금','토'];
+
+  const byDate={};
+  data.forEach(p=>{
+    const dt=parseDue(p.due); if(!dt)return;
+    if(dt.getFullYear()===calYear&&dt.getMonth()===calMonth){
+      const k=dt.getDate();
+      if(!byDate[k])byDate[k]=[];
+      byDate[k].push(p);
+    }
+  });
+
+  let cells='';
+  for(let i=0;i<startDow;i++) cells+=`<div class="cal-day other-month"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const isToday=TODAY.getFullYear()===calYear&&TODAY.getMonth()===calMonth&&TODAY.getDate()===d;
+    const parts=byDate[d]||[];
+    const evts=parts.slice(0,3).map(p=>`<div class="cal-event ${dueClass(p.due)}" onclick="openDetailModal('${p.pn}')" title="${p.pn}">${p.pn.slice(-5)}</div>`).join('');
+    const more=parts.length>3?`<div style="font-size:9px;color:var(--muted)">+${parts.length-3}개</div>`:'';
+    cells+=`<div class="cal-day ${isToday?'today':''}"><div class="cal-day-num">${d}</div>${evts}${more}</div>`;
+  }
+
+  const totalDue=Object.values(byDate).flat().length;
+  const listItems=Object.entries(byDate).sort((a,b)=>a[0]-b[0]).flatMap(([day,parts])=>
+    parts.map(p=>`
+      <div onclick="openDetailModal('${p.pn}')" style="display:flex;align-items:center;gap:10px;background:var(--surface);border:.5px solid var(--border);border-radius:7px;padding:8px 12px;cursor:pointer;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);width:28px;text-align:center">${day}일</div>
+        <div style="font-family:Calibri,monospace;font-size:10px;color:var(--muted);width:95px">${p.pn}</div>
+        <div style="flex:1;font-size:11.5px">${(p.desc||'').substring(0,38)}</div>
+        <div style="display:flex;gap:5px;align-items:center">${sBadge(p.status)} ${dueBadge(p.due)}</div>
+      </div>`)
+  ).join('');
+
+  document.getElementById('view-calendar').innerHTML=`
+    <div class="cal-header">
+      <div class="cal-nav">
+        <button onclick="calNav(-1)">&#8249;</button>
+        <span class="cal-title">${calYear}년 ${months[calMonth]}</span>
+        <button onclick="calNav(1)">&#8250;</button>
+      </div>
+      <span style="font-size:11.5px;color:var(--muted)">이번 달 납기: <b>${totalDue}</b>개 파트</span>
+    </div>
+    <div class="cal-grid">
+      ${days.map(d=>`<div class="cal-day-hd">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <div style="margin-top:18px;">
+      <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:8px;">이번 달 납기 파트 목록</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${listItems||'<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">이번 달 납기 파트 없음</div>'}
+      </div>
+    </div>`;
+}
+function calNav(dir){ calMonth+=dir; if(calMonth<0){calMonth=11;calYear--;} if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); }
+window.calNav=calNav;
+
+// ── VIEW SWITCHING
+function switchView(v){
+  currentView=v;
+  ['table','kanban','calendar'].forEach(id=>{
+    document.getElementById('view-'+id).style.display=id===v?'block':'none';
+    document.getElementById('tab-'+id).classList.toggle('active',id===v);
+  });
+  const toolbar=document.getElementById('toolbar');
+  toolbar.style.display=v==='calendar'?'none':'flex';
+  renderCurrentView();
+}
+function renderCurrentView(){
+  const data=getFiltered();
+  updateCounts(data);
+  updateRiskBanner(DATA);
+  if(currentView==='table') renderTable(data);
+  else if(currentView==='kanban') renderKanban(data);
+  else if(currentView==='calendar') renderCalendar();
+}
+
+// ── FILTER
+function filterByStatus(val){
+  activeCard=(activeCard===val)?'':val;
+  updateCardHighlight(activeCard);
+  renderCurrentView();
+}
+function updateCardHighlight(val){
+  ['card-total','card-mfg','card-fai','card-act','card-hold'].forEach(id=>{
+    const el=document.getElementById(id); if(el)el.classList.remove('active-filter');
+  });
+  const map={mfg:'card-mfg',fai:'card-fai',action:'card-act',hold:'card-hold'};
+  if(val&&map[val])document.getElementById(map[val]).classList.add('active-filter');
+}
+function getFiltered(){
+  const bu=document.getElementById('f-bu').value;
+  const st=document.getElementById('f-status').value;
+  const q=document.getElementById('f-search').value.toLowerCase();
+  const due=document.getElementById('f-due').value;
+  const out=document.getElementById('f-out').value;
+  return DATA.filter(p=>{
+    if(bu&&p.bu!==bu)return false;
+    if(activeCard){
+      if(activeCard==='mfg'&&p.status!=='Manufacturing in process')return false;
+      if(activeCard==='fai'&&p.status!=='FAI contingent')return false;
+      if(activeCard==='action'&&!['IONES action required','Applied response pending'].includes(p.status))return false;
+      if(activeCard==='hold'&&p.status!=='Hold')return false;
+    } else if(st&&p.status!==st)return false;
+    if(q&&!(p.pn||'').toLowerCase().includes(q)&&!(p.desc||'').toLowerCase().includes(q))return false;
+    if(due){
+      const dt=parseDue(p.due); const days=dt?Math.ceil((dt-TODAY)/86400000):null;
+      if(due==='urgent'&&(days===null||days>3))return false;
+      if(due==='soon'&&(days===null||days>7))return false;
+      if(due==='month'&&(days===null||days>31))return false;
+    }
+    if(out){
+      const vs=detectOut(p); if(!vs.some(v=>v.key===out))return false;
+    }
+    return true;
+  });
+}
+function applyFilter(){ renderCurrentView(); }
+function resetF(){
+  ['f-bu','f-status','f-search','f-due','f-out'].forEach(id=>document.getElementById(id).value='');
+  activeCard=''; updateCardHighlight(''); renderCurrentView();
+}
+function refreshBu(){
+  const sel=document.getElementById('f-bu');
+  const bus=[...new Set(DATA.map(p=>p.bu).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">전체 BU</option>'+bus.map(b=>`<option>${b}</option>`).join('');
+}
+
+// ── EXCEL UPLOAD (Feature 7: Change Highlight)
+function handleFile(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!json.length)throw new Error('빈 파일');
+      excelHeaders=json[0].map(h=>String(h));
+      excelRows=json.slice(1).filter(r=>r.some(c=>c!==''));
+      showModal();
+    }catch(err){showSt('err','읽기 실패: '+err.message);}
+  };
+  r.readAsArrayBuffer(file);
+}
+function showModal(){
+  const opts='<option value="">— 선택 —</option>'+excelHeaders.map((h,i)=>`<option value="${i}">${h}</option>`).join('');
+  const auto={};
+  const kw={no:['no','번호'],bu:['bu','사업부'],pn:['p/n','pn','part'],desc:['desc','description','품명'],
+    status:['status','현황','part status'],action:['action','액션'],out:['외주','outsource'],
+    due:['due','마감','납기'],poc:['poc','담당']};
+  excelHeaders.forEach((h,i)=>{const hl=h.toLowerCase();for(const[f,k]of Object.entries(kw)){if(!auto[f]&&k.some(x=>hl.includes(x)))auto[f]=i;}});
+  document.getElementById('col-grid').innerHTML=Object.entries(FIELDS).map(([f,l])=>`<span>${l}</span><select id="m-${f}">${opts}</select>`).join('');
+  Object.entries(auto).forEach(([f,i])=>{const s=document.getElementById('m-'+f);if(s)s.value=i;});
+  document.getElementById('modal-bg').classList.add('on');
+}
+function closeModal(){document.getElementById('modal-bg').classList.remove('on');}
+function applyMap(){
+  const map={};
+  Object.keys(FIELDS).forEach(f=>{const s=document.getElementById('m-'+f);map[f]=s&&s.value!==''?parseInt(s.value):null;});
+  // Feature 7: Save previous data for change detection
+  prevData=[...DATA];
+  const newData=excelRows.map((row,i)=>({
+    no:map.no!==null?row[map.no]:i+1,
+    bu:map.bu!==null?String(row[map.bu]||'').trim():'',
+    pn:map.pn!==null?String(row[map.pn]||'').trim():'',
+    desc:map.desc!==null?String(row[map.desc]||'').trim():'',
+    status:map.status!==null?String(row[map.status]||'').trim():'',
+    action:map.action!==null?String(row[map.action]||'').trim():'',
+    out:map.out!==null?String(row[map.out]||'').trim():'',
+    due:map.due!==null?String(row[map.due]||'').trim():'',
+    poc:map.poc!==null?String(row[map.poc]||'').trim():'',
+  })).filter(p=>p.pn||p.desc);
+
+  // Detect changes
+  changedPns=new Set();
+  newPns=new Set();
+  const prevMap=new Map(prevData.map(p=>[p.pn,p]));
+  newData.forEach(p=>{
+    const prev=prevMap.get(p.pn);
+    if(!prev) newPns.add(p.pn);
+    else if(prev.status!==p.status||prev.action!==p.action||prev.due!==p.due) changedPns.add(p.pn);
+  });
+
+  DATA=[...newData];
+  closeModal(); refreshBu(); resetF();
+  const msg=`${DATA.length}개 로드 — 신규 ${newPns.size}개, 변경 ${changedPns.size}개`;
+  showSt(newPns.size||changedPns.size?'info':'ok', msg);
+  document.getElementById('fdate').textContent='업데이트: '+new Date().toLocaleDateString('ko-KR');
+}
+function showSt(type,msg){
+  const el=document.getElementById('ustatus'); el.className='ustatus '+type; el.textContent=msg;
+  setTimeout(()=>{el.className='ustatus';},6000);
+}
+
+// ── DRAG DROP
+document.addEventListener('dragover',e=>{e.preventDefault();document.getElementById('drop-ov').classList.add('on');});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElementById('drop-ov').classList.remove('on');});
+document.addEventListener('drop',e=>{
+  e.preventDefault(); document.getElementById('drop-ov').classList.remove('on');
+  const f=e.dataTransfer.files[0];
+  if(f&&(f.name.endsWith('.xlsx')||f.name.endsWith('.xls')))handleFile(f);
+  else showSt('err','.xlsx/.xls만 가능합니다');
+});
+
+// ── EVENTS
+document.getElementById('file-input').addEventListener('change',e=>handleFile(e.target.files[0]));
+document.getElementById('f-search').addEventListener('input',applyFilter);
+document.getElementById('f-bu').addEventListener('change',()=>{activeCard='';updateCardHighlight('');applyFilter();});
+document.getElementById('f-status').addEventListener('change',()=>{activeCard='';updateCardHighlight('');applyFilter();});
+document.getElementById('f-due').addEventListener('change',applyFilter);
+document.getElementById('f-out').addEventListener('change',applyFilter);
+
+// ── INIT
+document.getElementById('hdate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+document.getElementById('fdate').textContent='기본 데이터 표시 중 — 엑셀 업로드 시 자동 갱신';
+refreshBu();
+renderCurrentView();
+</script>
+</body>
+</html>
